@@ -401,19 +401,36 @@ namespace eastl
 			~function_base_detail() EA_NOEXCEPT = default;
 		};
 
-		#define EASTL_INTERNAL_FUNCTION_VALID_FUNCTION_ARGS(FUNCTOR, RET, ARGS, BASE, MYSELF)  \
-			typename eastl::enable_if_t<eastl::is_invocable_r_v<RET, FUNCTOR, ARGS> &&         \
-										!eastl::is_base_of_v<BASE, eastl::decay_t<FUNCTOR>> && \
-										!eastl::is_same_v<eastl::decay_t<FUNCTOR>, MYSELF>>
-
-		#define EASTL_INTERNAL_FUNCTION_DETAIL_VALID_FUNCTION_ARGS(FUNCTOR, RET, ARGS, MYSELF) \
-			EASTL_INTERNAL_FUNCTION_VALID_FUNCTION_ARGS(FUNCTOR, RET, ARGS, MYSELF, MYSELF)
-
-
 		/// function_detail
 		///
 		template <int, typename>
 		class function_detail;
+
+		namespace details
+		{
+			template <int X, typename T>
+			auto pre_derived_from_function_detail(const volatile function_detail<X, T>*) -> eastl::true_type;
+			auto pre_derived_from_function_detail(...) -> eastl::false_type;
+
+			template <typename D>
+			auto derived_from_function_detail(int) -> decltype(pre_derived_from_function_detail(static_cast<D*>(nullptr)));
+			template <typename>
+			auto derived_from_function_detail(...) -> eastl::false_type;
+		}
+
+		template <typename Derived>
+		struct is_derived_from_function_detail : eastl::conjunction<eastl::is_class<Derived>,
+																	decltype(details::derived_from_function_detail<Derived>(0))>
+		{};
+
+		#define EASTL_INTERNAL_FUNCTION_VALID_FUNCTION_ARGS(FUNCTOR, RET, ARGS, BASE, MYSELF)  \
+			typename eastl::enable_if_t<eastl::is_invocable_r_v<RET, FUNCTOR, ARGS> &&         \
+										!eastl::is_base_of_v<BASE, eastl::decay_t<FUNCTOR>> && \
+										!eastl::internal::is_derived_from_function_detail<eastl::decay_t<FUNCTOR>>::value && \
+										!eastl::is_same_v<eastl::decay_t<FUNCTOR>, MYSELF>>
+
+		#define EASTL_INTERNAL_FUNCTION_DETAIL_VALID_FUNCTION_ARGS(FUNCTOR, RET, ARGS, MYSELF) \
+			EASTL_INTERNAL_FUNCTION_VALID_FUNCTION_ARGS(FUNCTOR, RET, ARGS, MYSELF, MYSELF)
 
 		template <int SIZE_IN_BYTES, typename R, typename... Args>
 		class function_detail<SIZE_IN_BYTES, R(Args...)> : public function_base_detail<SIZE_IN_BYTES>
